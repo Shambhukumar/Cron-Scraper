@@ -305,9 +305,9 @@ const NYT = async (category) => {
             return null;
         }
     } catch (e) {
-        console.log(error(e));
+        console.log(e);
         // await browser.close();
-        console.log(error("Browser Closed"));
+        console.log("Browser Closed");
     } finally {
         // await browser.close();
     }
