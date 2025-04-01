@@ -1,19 +1,24 @@
-FROM node:18
+FROM node:lts-alpine
 
-# Install required dependencies
-RUN apt-get update && apt-get install -y wget gnupg
-
-# Install Google Chrome
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - && \
-    echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list && \
-    apt-get update && apt-get install -y google-chrome-stable
-
-# Set the working directory
 WORKDIR /app
-COPY . .
 
-# Install Node.js dependencies
+RUN apk update && apk add --no-cache nmap && \
+    echo @edge https://dl-cdn.alpinelinux.org/alpine/edge/community >> /etc/apk/repositories && \
+    echo @edge https://dl-cdn.alpinelinux.org/alpine/edge/main >> /etc/apk/repositories && \
+    apk update && \
+    apk add --no-cache \
+      chromium \
+      harfbuzz \
+      "freetype>2.8" \
+      ttf-freefont \
+      nss
+
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
+COPY . /app
+
 RUN npm install
 
-# Start the application
-CMD ["node", "index.js"]
+EXPOSE 3000
+
+CMD ["npm", "start"]
