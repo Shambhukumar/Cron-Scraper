@@ -1,12 +1,17 @@
 const puppeteer = require("puppeteer");
 const axios = require("axios");
 
+const express = require('express');
+
+const app = express();
+const PORT = process.env.PORT || 3000; // Use Render's PORT
+
 const headlessStatus = true;
 const newsTopicArr = ["home", "world", "politics", "business", "sports", "health", "Middle East", "Ukraine Russia", "asia", "uk"];
 // const newsTopicArr = ["Middle East"];
 const collectedNewsArr = [];
 
-const APP_BASE_URL = "http://localhost:3000/.netlify/functions/server/"
+const APP_BASE_URL = "https://archer-api.netlify.app/.netlify/functions/server/"
 
 // Storing News Format
 // {
@@ -17,6 +22,16 @@ const APP_BASE_URL = "http://localhost:3000/.netlify/functions/server/"
 //     category: "category of the article",
 //     articleText: "article text",
 // }
+
+const timeout = 0; // 60 seconds
+
+const axiosInstance = axios.create({
+    baseURL: APP_BASE_URL,
+    timeout: 30000,
+})
+
+const executablePath = '/usr/bin/chromium-browser';
+// const executablePath = '';
 
 
 
@@ -31,12 +46,21 @@ const init = async () => {
 };
 
 const puppeteerArgs = [
-    // '--no-sandbox',
-    // '--disable-setuid-sandbox',
-    // "--incognito",
-    // "--single-process",
-    // '--disable-dev-shm-usage',
-    // "--no-zygote"
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-gpu',
+    '--disable-dev-shm-usage', // Prevents memory issues in Docker
+    // '--disable-extensions',  // Disable Chrome extensions
+    // '--disable-default-apps',  // Disable default Chrome apps
+    // '--no-zygote',
+
+
+    '--no-zygote',
+    '--disable-dev-tools',
+    '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+    '--disable-features=IsolateOrigins,site-per-process',
+    '--mute-audio',
+    '--disable-accelerated-2d-canvas',
 ];
 
 const BBC = async (category) => {
@@ -55,14 +79,20 @@ const BBC = async (category) => {
         let urlWithCategory = bbcCategoryUrlsObj[category] || `${defaultUrl}/news/${category}`;
 
 
-        const browser = await puppeteer.launch({
+        var browser = await puppeteer.launch({
+            timeout: timeout,
+            executablePath,
             headless: headlessStatus,
             args: puppeteerArgs,
         });
 
         const page = await browser.newPage();
+        await page.setUserAgent(
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 15_5 like Mac OS X) AppleWebKit/537.36 (KHTML, like Gecko) Mobile/15E148 Safari/537.36'
+  );
+        await page.setViewport({ width: 375, height: 667 });
         page.setDefaultNavigationTimeout(0);
-        await page.goto(urlWithCategory, { waitUntil: "domcontentloaded" });
+        await page.goto(urlWithCategory, { timeout: timeout });
 
         const news = await page.evaluate(async (category) => {
             const scrollIntoViewWithDelay = (element) => {
@@ -126,7 +156,7 @@ const BBC = async (category) => {
 
 
         if (news.length > 1) {
-            await axios.post(APP_BASE_URL + `saveNews`, {
+            await axiosInstance.post(`saveNews`, {
                 data: {
                     Category: category,
                     brodcaster: "BBC",
@@ -138,7 +168,7 @@ const BBC = async (category) => {
         }
     } catch (e) {
         console.log(e);
-        // await browser.close();
+        await browser.close();
         // console.log(e);
     }
 };
@@ -157,9 +187,18 @@ const Gurdian = async (category) => {
     let urlWithCategory = gurdianCategoryUrlsObj[category] || `https://www.theguardian.com/${category}`;
 
     try {
-        const browser = await puppeteer.launch({ headless: headlessStatus, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+        var browser = await puppeteer.launch({ 
+            timeout: timeout,
+            executablePath,
+            headless: headlessStatus, 
+            args: puppeteerArgs
+        });
         const page = await browser.newPage();
-        await page.goto(urlWithCategory);
+        await page.setUserAgent(
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 15_5 like Mac OS X) AppleWebKit/537.36 (KHTML, like Gecko) Mobile/15E148 Safari/537.36'
+  );
+        await page.setViewport({ width: 375, height: 667 });
+        await page.goto(urlWithCategory, {timeout: timeout});
 
         const news = await page.evaluate((CurrentCategory) => {
             const list = document.querySelectorAll('li');
@@ -197,7 +236,7 @@ const Gurdian = async (category) => {
         await browser.close();
 
         if (news.length > 1) {
-            await axios.post(APP_BASE_URL + `saveNews`, {
+            await axiosInstance.post(`saveNews`, {
                 data: {
                     Category: category,
                     brodcaster: "Guardian",
@@ -209,13 +248,12 @@ const Gurdian = async (category) => {
         }
     } catch (e) {
         console.log(e);
-        // await browser.close();
+        await browser.close();
         console.log("Browser Closed");
     } finally {
-        // await browser.close();
+        await browser.close();
     }
 };
-
 
 const NYT = async (category) => {
     console.log(`Inside NYT ${category}`);
@@ -231,12 +269,18 @@ const NYT = async (category) => {
 
         let urlWithCategory = NYTCategoryUrlsObj[category] || `${url}/${category}`;
 
-        const browser = await puppeteer.launch({
+        var browser = await puppeteer.launch({
+            timeout: timeout,
+            executablePath,
             headless: headlessStatus,
             args: puppeteerArgs
         });
         const page = await browser.newPage();
-        await page.goto(urlWithCategory);
+        await page.setUserAgent(
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 15_5 like Mac OS X) AppleWebKit/537.36 (KHTML, like Gecko) Mobile/15E148 Safari/537.36'
+  );
+        await page.setViewport({ width: 375, height: 667 });
+        await page.goto(urlWithCategory, {timeout: timeout});
 
         const news = await page.evaluate((CurrentCategory) => {
             const FilterdNews = [];
@@ -291,10 +335,10 @@ const NYT = async (category) => {
         console.log("browser Closed");
         await browser.close();
 
-        console.log(news.lenght)
+        console.log(news.length)
 
         if (news.length > 1) {
-            await axios.post(APP_BASE_URL + `saveNews`, {
+            await axiosInstance.post(`saveNews`, {
                 data: {
                     Category: category,
                     brodcaster: "NYT",
@@ -306,35 +350,45 @@ const NYT = async (category) => {
         }
     } catch (e) {
         console.log(e);
-        // await browser.close();
+        await browser.close();
         console.log("Browser Closed");
     } finally {
-        // await browser.close();
+        await browser.close();
     }
 };
 
 const CNN = async (category) => {
     console.log(`Inside CNN ${category}`);
+    const url = `https://edition.cnn.com`;
+    const CNNCategoryUrlsObj = {
+        home: `${url}/`,
+        'Middle East': `${url}/world/middleeast`,
+        'Ukraine Russia': `${url}/world/europe/ukraine`,
+    }
+    let urlWithCategory = CNNCategoryUrlsObj[category] || `${url}/${category}`;
     try {
-        const url = `https://edition.cnn.com`;
 
-        const CNNCategoryUrlsObj = {
-            home: `${url}/`,
-            'Middle East': `${url}/world/middleeast`,
-            'Ukraine Russia': `${url}/world/europe/ukraine`,
-        }
-
-        let urlWithCategory = CNNCategoryUrlsObj[category] || `${url}/${category}`;
-
-        const browser = await puppeteer.launch({
+        var browser = await puppeteer.launch({
+            timeout: timeout,
+            executablePath,
             headless: headlessStatus,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
+            args: [
+                '--disable-gpu', 
+                '--disable-dev-shm-usage',
+                '--disable-setuid-sandbox', 
+                '--no-sandbox', 
+                '--no-zygote',
+                
+            ]
         });
         const page = await browser.newPage();
-        // page.setRequestInterception(true);
-        await page.goto(urlWithCategory, { waitUntil: 'networkidle2', timeout: 0 });
-
-        const news = await page.evaluate((CurrentCategory) => {
+        await page.setViewport({ width: 800, height: 600 });
+        await page.setUserAgent(
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 15_5 like Mac OS X) AppleWebKit/537.36 (KHTML, like Gecko) Mobile/15E148 Safari/537.36'
+  );
+        await page.setViewport({ width: 375, height: 667 });
+        await page.goto(urlWithCategory, { waitUntil: "domcontentloaded", timeout: timeout  });
+        const news = await page.evaluate(async (CurrentCategory) => {
             const list = document.querySelectorAll('.card');
             const arrayList = Array.from(list);
             const FilterdNews = [];
@@ -368,7 +422,7 @@ const CNN = async (category) => {
         console.log(news.length);
 
         if (news.length > 9) {
-            await axios.post(APP_BASE_URL + `saveNews`, {
+            await axiosInstance.post(`saveNews`, {
                 data: {
                     Category: category,
                     brodcaster: "CNN",
@@ -380,13 +434,24 @@ const CNN = async (category) => {
         }
     } catch (e) {
         console.log(e);
-        // await browser.close();
+        await browser.close();
         console.log("Browser Closed");
     } finally {
-        // await browser.close();
+        await browser.close();
     }
 };
 
 
 
-init();
+// init();
+
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+
+
+  app.get('/runScraper', async (req, res) => {
+    console.log("Scraper started")
+    init()
+  })
